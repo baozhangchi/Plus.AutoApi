@@ -31,6 +31,8 @@ namespace Plus.AutoApi
 
         public Func<string, string> GetRestFulActionName { get; set; }
 
+        public Func<string, string> GetRestFulControllerName { get; set; }
+
         public Dictionary<Assembly, AssemblyAutoApiOptions> AssemblyAutoApiOptions { get; }
 
         public void Valid()
