@@ -9,5 +9,7 @@ namespace Plus.AutoApi.Attributes
         public string AreaName { get; set; }
 
         public bool Disabled { get; set; } = false;
+
+        public bool Inherited { get; set; } = true;
     }
 }

@@ -43,56 +43,89 @@ namespace Plus.AutoApi
         private void ConfigureArea(ControllerModel controller, AutoApiAttribute attribute)
         {
             if (attribute == null)
+            {
                 throw new ArgumentException(nameof(attribute));
+            }
 
             if (!controller.RouteValues.ContainsKey("area"))
             {
                 if (!string.IsNullOrEmpty(attribute.AreaName))
+                {
                     controller.RouteValues["area"] = attribute.AreaName;
+                }
                 else if (!string.IsNullOrEmpty(PlusConsts.DefaultAreaName))
+                {
                     controller.RouteValues["area"] = PlusConsts.DefaultAreaName;
+                }
             }
         }
 
         private void ConfigureAutoApi(ControllerModel controller, AutoApiAttribute attribute)
         {
-            ConfigureApiExplorer(controller);
+            ConfigureApiExplorer(controller, attribute);
             ConfigureSelector(controller, attribute);
             ConfigureParameters(controller);
         }
 
-        private void ConfigureApiExplorer(ControllerModel controller)
+        private void ConfigureApiExplorer(ControllerModel controller, AutoApiAttribute attribute)
         {
             if (string.IsNullOrEmpty(controller.ApiExplorer.GroupName))
+            {
                 controller.ApiExplorer.GroupName = controller.ControllerName;
+            }
 
-            if (controller.ApiExplorer.IsVisible == null) controller.ApiExplorer.IsVisible = true;
+            controller.ApiExplorer.IsVisible ??= true;
 
-            foreach (var action in controller.Actions) ConfigureApiExplorer(action);
+            foreach (var action in controller.Actions)
+            {
+                ConfigureApiExplorer(action, attribute);
+            }
         }
 
-        private void ConfigureApiExplorer(ActionModel action)
+        private void ConfigureApiExplorer(ActionModel action, AutoApiAttribute attribute)
         {
-            if (action.ApiExplorer.IsVisible == null) action.ApiExplorer.IsVisible = true;
+            if (!attribute.Inherited)
+            {
+                if (action.ActionMethod.DeclaringType != action.Controller.ControllerType)
+                {
+                    action.ApiExplorer.IsVisible = false;
+                    return;
+                }
+            }
+
+            action.ApiExplorer.IsVisible ??= true;
         }
 
         private void ConfigureSelector(ControllerModel controller, AutoApiAttribute attribute)
         {
-            if (controller.Selectors.Any(selector => selector.AttributeRouteModel != null)) return;
+            if (controller.Selectors.Any(selector => selector.AttributeRouteModel != null))
+            {
+                return;
+            }
 
             var areaName = string.Empty;
 
-            if (attribute != null) areaName = attribute.AreaName;
+            if (attribute != null)
+            {
+                areaName = attribute.AreaName;
+            }
 
-            foreach (var action in controller.Actions) ConfigureSelector(areaName, controller.ControllerName, action);
+            foreach (var action in controller.Actions)
+            {
+                ConfigureSelector(areaName, controller.ControllerName, action);
+            }
         }
 
         private void ConfigureSelector(string areaName, string controllerName, ActionModel action)
         {
             if (!action.Selectors.Any() || action.Selectors.Any(x => !x.ActionConstraints.Any()))
+            {
                 AddApplicationServiceSelector(areaName, controllerName, action);
+            }
             else
+            {
                 NormalizeSelectorRoutes(areaName, controllerName, action);
+            }
         }
 
         private void AddApplicationServiceSelector(string areaName, string controllerName, ActionModel action)
@@ -104,7 +137,9 @@ namespace Plus.AutoApi
             var appServiceSelectorModel = action.Selectors[0];
 
             if (appServiceSelectorModel.AttributeRouteModel == null)
+            {
                 appServiceSelectorModel.AttributeRouteModel = CreateActionRouteModel(areaName, controllerName, action);
+            }
 
             if (!appServiceSelectorModel.ActionConstraints.Any())
             {
@@ -134,10 +169,12 @@ namespace Plus.AutoApi
             action.ActionName = GetRestFulActionName(action.ActionName);
 
             foreach (var selector in action.Selectors)
+            {
                 selector.AttributeRouteModel = selector.AttributeRouteModel == null
                     ? CreateActionRouteModel(areaName, controllerName, action)
                     : AttributeRouteModel.CombineAttributeRouteModel(
                         CreateActionRouteModel(areaName, controllerName, action), selector.AttributeRouteModel);
+            }
         }
 
         private static string GetHttpVerb(ActionModel action)
@@ -147,7 +184,9 @@ namespace Plus.AutoApi
                     out var assemblyAutoApiOptions);
 
             if (getValueSuccess && !string.IsNullOrWhiteSpace(assemblyAutoApiOptions?.HttpVerb))
+            {
                 return assemblyAutoApiOptions.HttpVerb;
+            }
 
             var verbKey = action.ActionName.GetPascalOrCamelCaseFirstWord().ToLower();
 
@@ -160,7 +199,10 @@ namespace Plus.AutoApi
         {
             controllerName = controllerName.RemoveSuffix(PlusConsts.ControllerSuffixes.ToArray());
             var name = PlusConsts.GetRestFulControllerName?.Invoke(controllerName);
-            if (!string.IsNullOrWhiteSpace(name)) return name;
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
 
             return controllerName;
         }
@@ -169,13 +211,19 @@ namespace Plus.AutoApi
         {
             actionName = actionName.RemoveSuffix(PlusConsts.ActionSuffixes.ToArray());
             var name = PlusConsts.GetRestFulActionName?.Invoke(actionName);
-            if (name != null) return name;
+            if (name != null)
+            {
+                return name;
+            }
 
             var verbKey = actionName.GetPascalOrCamelCaseFirstWord().ToLower();
             if (PlusConsts.HttpVerbs.ContainsKey(verbKey))
             {
                 if (actionName.Length == verbKey.Length)
+                {
                     return "";
+                }
+
                 return actionName.Substring(verbKey.Length);
             }
 
@@ -197,7 +245,9 @@ namespace Plus.AutoApi
                     out var assemblyAutoApiOptions);
 
             if (getValueSuccess && !string.IsNullOrWhiteSpace(assemblyAutoApiOptions?.ApiPrefix))
+            {
                 return assemblyAutoApiOptions.ApiPrefix;
+            }
 
             return PlusConsts.DefaultApiPreFix;
         }
@@ -207,29 +257,47 @@ namespace Plus.AutoApi
             foreach (var action in controller.Actions)
             foreach (var para in action.Parameters)
             {
-                if (para.BindingInfo != null) continue;
+                if (para.BindingInfo != null)
+                {
+                    continue;
+                }
 
                 if (!TypeHelper.IsPrimitiveExtendedIncludingNullable(para.ParameterInfo.ParameterType))
+                {
                     if (CanUseFormBodyBinding(action, para))
+                    {
                         para.BindingInfo = BindingInfo.GetBindingInfo(new[] { new FromBodyAttribute() });
+                    }
+                }
             }
         }
 
         private bool CanUseFormBodyBinding(ActionModel action, ParameterModel parameter)
         {
             if (PlusConsts.FormBodyBindingIgnoredTypes.Any(t =>
-                    t.IsAssignableFrom(parameter.ParameterInfo.ParameterType))) return false;
+                    t.IsAssignableFrom(parameter.ParameterInfo.ParameterType)))
+            {
+                return false;
+            }
 
             foreach (var selector in action.Selectors)
             {
-                if (selector.ActionConstraints == null) continue;
+                if (selector.ActionConstraints == null)
+                {
+                    continue;
+                }
 
                 foreach (var actionConstraint in selector.ActionConstraints)
                 {
-                    if (!(actionConstraint is HttpMethodActionConstraint httpMethodActionConstraint)) continue;
+                    if (!(actionConstraint is HttpMethodActionConstraint httpMethodActionConstraint))
+                    {
+                        continue;
+                    }
 
                     if (httpMethodActionConstraint.HttpMethods.All(x => x.IsIn("GET", "DELETE", "TRACE", "HEAD")))
+                    {
                         return false;
+                    }
                 }
             }
 
