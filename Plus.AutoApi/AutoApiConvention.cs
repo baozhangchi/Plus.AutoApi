@@ -8,6 +8,7 @@ using Plus.AutoApi.Helpers;
 using System;
 using System.Linq;
 using System.Reflection;
+using Plus.AutoApi.Core;
 
 namespace Plus.AutoApi
 {
