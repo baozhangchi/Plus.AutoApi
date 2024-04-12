@@ -38,6 +38,7 @@ namespace Plus.AutoApi
             PlusConsts.ActionSuffixes = options.RemoveActionSuffixes;
             PlusConsts.FormBodyBindingIgnoredTypes = options.FormBodyBindingIgnoredTypes;
             PlusConsts.GetRestFulActionName = options.GetRestFulActionName;
+            PlusConsts.GetRestFulControllerName = options.GetRestFulControllerName;
             PlusConsts.AssemblyAutoApiOptions = options.AssemblyAutoApiOptions;
 
             var partManager = services.GetSingletonInstanceOrNull<ApplicationPartManager>();

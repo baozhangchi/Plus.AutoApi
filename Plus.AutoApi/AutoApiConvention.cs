@@ -1,14 +1,13 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Linq;
+using System.Reflection;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ActionConstraints;
 using Microsoft.AspNetCore.Mvc.ApplicationModels;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Plus.AutoApi.Attributes;
 using Plus.AutoApi.Extensions;
 using Plus.AutoApi.Helpers;
-using System;
-using System.Linq;
-using System.Reflection;
-using Plus.AutoApi.Core;
 
 namespace Plus.AutoApi
 {
@@ -23,7 +22,7 @@ namespace Plus.AutoApi
 
                 if (typeof(IAutoApi).GetTypeInfo().IsAssignableFrom(type))
                 {
-                    controller.ControllerName = controller.ControllerName.RemoveSuffix(PlusConsts.ControllerSuffixes.ToArray());
+                    controller.ControllerName = GetRestFulControllerName(controller.ControllerName);
 
                     ConfigureArea(controller, attribute);
 
@@ -44,7 +43,9 @@ namespace Plus.AutoApi
         private void ConfigureArea(ControllerModel controller, AutoApiAttribute attribute)
         {
             if (attribute == null)
+            {
                 throw new ArgumentException(nameof(attribute));
+            }
 
             if (!controller.RouteValues.ContainsKey("area"))
             {
@@ -61,35 +62,38 @@ namespace Plus.AutoApi
 
         private void ConfigureAutoApi(ControllerModel controller, AutoApiAttribute attribute)
         {
-            ConfigureApiExplorer(controller);
+            ConfigureApiExplorer(controller, attribute);
             ConfigureSelector(controller, attribute);
             ConfigureParameters(controller);
         }
 
-        private void ConfigureApiExplorer(ControllerModel controller)
+        private void ConfigureApiExplorer(ControllerModel controller, AutoApiAttribute attribute)
         {
             if (string.IsNullOrEmpty(controller.ApiExplorer.GroupName))
             {
                 controller.ApiExplorer.GroupName = controller.ControllerName;
             }
 
-            if (controller.ApiExplorer.IsVisible == null)
-            {
-                controller.ApiExplorer.IsVisible = true;
-            }
+            controller.ApiExplorer.IsVisible ??= true;
 
             foreach (var action in controller.Actions)
             {
-                ConfigureApiExplorer(action);
+                ConfigureApiExplorer(action, attribute);
             }
         }
 
-        private void ConfigureApiExplorer(ActionModel action)
+        private void ConfigureApiExplorer(ActionModel action, AutoApiAttribute attribute)
         {
-            if (action.ApiExplorer.IsVisible == null)
+            if (!attribute.Inherited)
             {
-                action.ApiExplorer.IsVisible = true;
+                if (action.ActionMethod.DeclaringType != action.Controller.ControllerType)
+                {
+                    action.ApiExplorer.IsVisible = false;
+                    return;
+                }
             }
+
+            action.ApiExplorer.IsVisible ??= true;
         }
 
         private void ConfigureSelector(ControllerModel controller, AutoApiAttribute attribute)
@@ -166,15 +170,18 @@ namespace Plus.AutoApi
 
             foreach (var selector in action.Selectors)
             {
-                selector.AttributeRouteModel = selector.AttributeRouteModel == null ?
-                     CreateActionRouteModel(areaName, controllerName, action) :
-                     AttributeRouteModel.CombineAttributeRouteModel(CreateActionRouteModel(areaName, controllerName, action), selector.AttributeRouteModel);
+                selector.AttributeRouteModel = selector.AttributeRouteModel == null
+                    ? CreateActionRouteModel(areaName, controllerName, action)
+                    : AttributeRouteModel.CombineAttributeRouteModel(
+                        CreateActionRouteModel(areaName, controllerName, action), selector.AttributeRouteModel);
             }
         }
 
         private static string GetHttpVerb(ActionModel action)
         {
-            var getValueSuccess = PlusConsts.AssemblyAutoApiOptions.TryGetValue(action.Controller.ControllerType.Assembly, out AssemblyAutoApiOptions assemblyAutoApiOptions);
+            var getValueSuccess =
+                PlusConsts.AssemblyAutoApiOptions.TryGetValue(action.Controller.ControllerType.Assembly,
+                    out var assemblyAutoApiOptions);
 
             if (getValueSuccess && !string.IsNullOrWhiteSpace(assemblyAutoApiOptions?.HttpVerb))
             {
@@ -183,18 +190,31 @@ namespace Plus.AutoApi
 
             var verbKey = action.ActionName.GetPascalOrCamelCaseFirstWord().ToLower();
 
-            return PlusConsts.HttpVerbs.ContainsKey(verbKey) ? PlusConsts.HttpVerbs[verbKey] : PlusConsts.DefaultHttpVerb;
+            return PlusConsts.HttpVerbs.ContainsKey(verbKey)
+                ? PlusConsts.HttpVerbs[verbKey]
+                : PlusConsts.DefaultHttpVerb;
+        }
+
+        private string GetRestFulControllerName(string controllerName)
+        {
+            controllerName = controllerName.RemoveSuffix(PlusConsts.ControllerSuffixes.ToArray());
+            var name = PlusConsts.GetRestFulControllerName?.Invoke(controllerName);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+
+            return controllerName;
         }
 
         private string GetRestFulActionName(string actionName)
         {
+            actionName = actionName.RemoveSuffix(PlusConsts.ActionSuffixes.ToArray());
             var name = PlusConsts.GetRestFulActionName?.Invoke(actionName);
             if (name != null)
             {
                 return name;
             }
-
-            actionName = actionName.RemoveSuffix(PlusConsts.ActionSuffixes.ToArray());
 
             var verbKey = actionName.GetPascalOrCamelCaseFirstWord().ToLower();
             if (PlusConsts.HttpVerbs.ContainsKey(verbKey))
@@ -203,15 +223,11 @@ namespace Plus.AutoApi
                 {
                     return "";
                 }
-                else
-                {
-                    return actionName.Substring(verbKey.Length);
-                }
+
+                return actionName.Substring(verbKey.Length);
             }
-            else
-            {
-                return actionName;
-            }
+
+            return actionName;
         }
 
         private AttributeRouteModel CreateActionRouteModel(string areaName, string controllerName, ActionModel action)
@@ -224,7 +240,9 @@ namespace Plus.AutoApi
 
         private static string GetApiPreFix(ActionModel action)
         {
-            var getValueSuccess = PlusConsts.AssemblyAutoApiOptions.TryGetValue(action.Controller.ControllerType.Assembly, out AssemblyAutoApiOptions assemblyAutoApiOptions);
+            var getValueSuccess =
+                PlusConsts.AssemblyAutoApiOptions.TryGetValue(action.Controller.ControllerType.Assembly,
+                    out var assemblyAutoApiOptions);
 
             if (getValueSuccess && !string.IsNullOrWhiteSpace(assemblyAutoApiOptions?.ApiPrefix))
             {
@@ -237,20 +255,18 @@ namespace Plus.AutoApi
         private void ConfigureParameters(ControllerModel controller)
         {
             foreach (var action in controller.Actions)
+            foreach (var para in action.Parameters)
             {
-                foreach (var para in action.Parameters)
+                if (para.BindingInfo != null)
                 {
-                    if (para.BindingInfo != null)
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    if (!TypeHelper.IsPrimitiveExtendedIncludingNullable(para.ParameterInfo.ParameterType))
+                if (!TypeHelper.IsPrimitiveExtendedIncludingNullable(para.ParameterInfo.ParameterType))
+                {
+                    if (CanUseFormBodyBinding(action, para))
                     {
-                        if (CanUseFormBodyBinding(action, para))
-                        {
-                            para.BindingInfo = BindingInfo.GetBindingInfo(new[] { new FromBodyAttribute() });
-                        }
+                        para.BindingInfo = BindingInfo.GetBindingInfo(new[] { new FromBodyAttribute() });
                     }
                 }
             }
@@ -258,7 +274,8 @@ namespace Plus.AutoApi
 
         private bool CanUseFormBodyBinding(ActionModel action, ParameterModel parameter)
         {
-            if (PlusConsts.FormBodyBindingIgnoredTypes.Any(t => t.IsAssignableFrom(parameter.ParameterInfo.ParameterType)))
+            if (PlusConsts.FormBodyBindingIgnoredTypes.Any(t =>
+                    t.IsAssignableFrom(parameter.ParameterInfo.ParameterType)))
             {
                 return false;
             }

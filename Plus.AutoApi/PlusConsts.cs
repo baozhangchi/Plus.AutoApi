@@ -44,6 +44,8 @@ namespace Plus.AutoApi
 
         public static Func<string, string> GetRestFulActionName { get; set; }
 
+        public static Func<string, string> GetRestFulControllerName { get; set; }
+
         public static Dictionary<Assembly, AssemblyAutoApiOptions> AssemblyAutoApiOptions { get; set; }
     }
 }
